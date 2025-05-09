@@ -37,7 +37,7 @@ residuos_N_norm = model_N_norm.resid
 import regression_tests as rt
 rt.diagnostic_plots(model_N_norm,n_cols=2)
 #['residuos', 'qq', 'hist', 'scale', 'leverage']
-rt.diagnostic_plots(model_N_norm,['leverage'])
+rt.diagnostic_plots(model_N_norm,['KS'])
 
 rt.diagnostic_plots(model_N_norm)
 rt.KS_test(model_N_norm, plot=False)

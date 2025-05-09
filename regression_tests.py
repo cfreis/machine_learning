@@ -76,7 +76,7 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson'], alpha=0.05, rigor=
     return df_results
 
 
-def KS_test(model, plot = True, alpha=0.05):
+def KS_test(model, alpha=0.05):
     '''
     Realiza o teste KS, comparando com a distribuição normal padrão e
         cria os gráficos correspondentes.
@@ -98,29 +98,6 @@ def KS_test(model, plot = True, alpha=0.05):
         result = f'{result}Não rejeitar'
     else:
         result = f'{result}Rejeitar'
-        
-    if plot:
-        # Gerar dados
-        # Calcular CDF empírica e teórica
-        x = np.linspace(-4, 4, 1000)
-        cdf_empirica = np.array([np.sum(residuos <= xx)/len(residuos) for xx in x])
-        cdf_teorica = stats.norm.cdf(x)
-        
-        # Encontrar o ponto de máxima diferença
-        idx_max = np.argmax(np.abs(cdf_empirica - cdf_teorica))
-        
-        # Plotar
-        plt.figure(figsize=(10, 6))
-        plt.plot(x, cdf_teorica, label='CDF Teórica N(0,1)')
-        plt.plot(x, cdf_empirica, label='CDF Empírica')
-        plt.vlines(x=x[idx_max], ymin=cdf_teorica[idx_max], ymax=cdf_empirica[idx_max], 
-                   color='red', linestyle='--', 
-                   label=f'Diferença máxima: {KS_statistic:.3f}')
-        plt.title('Teste de Kolmogorov-Smirnov')
-        plt.xlabel('Valores')
-        plt.ylabel('Probabilidade Acumulada')
-        plt.legend()
-        plt.show()
         
     return(result)
 
@@ -195,7 +172,7 @@ def extrai_dados(model):
 
     return(residuos, fitted)
 
-def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'leverage'], n_cols=2, figsize=(0, 0)):
+def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'leverage','KS'], n_cols=2, figsize=(0, 0)):
     """
     Cria subplots dinâmicos com os gráficos de diagnóstico selecionados.
     
@@ -204,7 +181,7 @@ def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'leverage'
     model : statsmodels.regression.linear_model.RegressionResultsWrapper
         Modelo de regressão ajustado
     plots : list, optional
-        Lista dos gráficos a incluir (opções: 'residuos', 'qq', 'hist', 'scale', 'leverage')
+        Lista dos gráficos a incluir (opções: 'residuos', 'qq', 'hist', 'scale', 'leverage','KS')
     n_cols : inteiro, opcional
         Túmero de colunas de gráficos no sub-plot. Default=2
     figsize : tuple, optional
@@ -223,7 +200,8 @@ def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'leverage'
         'qq': (plot_qq, (residuos,)),
         'hist': (plot_hist_residuos, (residuos,)),
         'scale': (plot_scale_location, (fitted, residuos)),
-        'leverage': (plot_leverage, (residuos, leverage, cooks_distance))
+        'leverage': (plot_leverage, (residuos, leverage, cooks_distance)),
+        'KS':(plot_KS, (fitted, residuos))
     }
     
     # Filtra apenas os plots solicitados e existentes
@@ -260,7 +238,28 @@ def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'leverage'
     plt.show()
 
 
-
+def plot_KS(fitted, residuos, ax):
+    # Calcular CDF empírica e teórica
+    x = np.linspace(-4, 4, 1000)
+    cdf_empirica = np.array([np.sum(residuos <= xx)/len(residuos) for xx in x])
+    cdf_teorica = stats.norm.cdf(x)
+    
+    # Encontrar o ponto de máxima diferença
+    idx_max = np.argmax(np.abs(cdf_empirica - cdf_teorica))
+    
+    KS_statistic, KS_p_value = stats.kstest(residuos, 'norm') 
+    
+    # Plotar
+    ax.plot(x, cdf_teorica, label='CDF Teórica N(0,1)')
+    ax.plot(x, cdf_empirica, label='CDF Empírica')
+    ax.vlines(x=x[idx_max], ymin=cdf_teorica[idx_max], ymax=cdf_empirica[idx_max], 
+               color='red', linestyle='--', 
+               label=f'Diferença máxima: {KS_statistic:.3f}')
+    ax.set_title('Teste de Kolmogorov-Smirnov')
+    ax.set_xlabel('Valores')
+    ax.set_ylabel('Probabilidade Acumulada')
+    ax.legend()
+    
    
 def plot_residuos_vs_ajustados(fitted, residuos, ax):
     """Gráfico de Resíduos vs Valores Ajustados"""
