@@ -38,7 +38,7 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson'], alpha=0.05, rigor=
     results = []
     
     if 'KS' in tests:
-        ks_result = KS_test(model, plot=plot, alpha=alpha)
+        ks_result = KS_test(model, alpha=alpha)
         teste, estatistica, valor_ref, resultado = ks_result.split(';')
         results.append({
             'Teste': teste,
