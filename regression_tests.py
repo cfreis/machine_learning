@@ -83,8 +83,6 @@ def KS_test(model, alpha=0.05):
     Parâmetros:
         model : statsmodels.regression.linear_model.RegressionResultsWrapper
             Modelo de regressão ajustado
-        plot : Boolean, opcional
-            imprime o gráfico KS - default=True
         alpha : float, opcional
             valor para comparação com o p-valor - default=0.05
     '''
