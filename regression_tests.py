@@ -1,12 +1,79 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from scipy import stats
 import seaborn as sns
 from statsmodels.graphics.gofplots import qqplot 
 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import OLSInfluence
 
+
 sns.set_style("whitegrid")
+
+
+def test_residues(model, tests=['KS', 'Shapiro', 'Anderson'], alpha=0.05, rigor=2, plot=True, vprint=False):
+    """
+    Realiza múltiplos testes de normalidade nos resíduos e retorna um DataFrame consolidado.
+    
+    Parâmetros:
+    -----------
+    model : statsmodels.regression.linear_model.RegressionResultsWrapper
+        Modelo de regressão ajustado
+    tests : list, optional
+        Lista dos testes a serem realizados ('KS', 'Shapiro', 'Anderson')
+    alpha : float, optional
+        Nível de significância para KS e Shapiro-Wilk (default=0.05)
+    rigor : int, optional
+        Nível de rigor para Anderson-Darling (0-4) (default=2 para 5%)
+    plot : bool, optional
+        Se True, mostra gráficos dos testes que possuem visualização (default=True)
+    vprint : bool, optional
+        Se True, mostra valores críticos detalhados (default=False)
+        
+    Retorna:
+    --------
+    pd.DataFrame
+        DataFrame com colunas: ['Teste', 'Estatística', 'Valor_Referência', 'Resultado']
+    """
+    results = []
+    
+    if 'KS' in tests:
+        ks_result = KS_test(model, plot=plot, alpha=alpha)
+        teste, estatistica, valor_ref, resultado = ks_result.split(';')
+        results.append({
+            'Teste': teste,
+            'Estatística': float(estatistica),
+            'p-value': valor_ref,
+            'Valor_Referência': f'p-valor={alpha}',
+            'Resultado': resultado
+        })
+    
+    if 'Shapiro' in tests:
+        shapiro_result = shapiro_test(model, alpha=alpha)
+        teste, estatistica, valor_ref, resultado = shapiro_result.split(';')
+        results.append({
+            'Teste': teste,
+            'Estatística': float(estatistica),
+            'p-value': valor_ref,
+            'Valor_Referência': f'p-valor={alpha}',
+            'Resultado': resultado
+        })
+    
+    if 'Anderson' in tests:
+        anderson_result = anderson_tests(model, rigor=rigor, vprint=vprint)
+        teste, estatistica, valor_ref, resultado, signif = anderson_result.split(';')
+        results.append({
+            'Teste': teste,
+            'Estatística': float(estatistica),
+            'p-value': valor_ref,
+            'Valor_Referência': f'Significancia={signif}',
+            'Resultado': resultado
+        })
+    
+    # Cria DataFrame
+    df_results = pd.DataFrame(results)
+    
+    return df_results
 
 
 def KS_test(model, plot = True, alpha=0.05):
@@ -14,9 +81,12 @@ def KS_test(model, plot = True, alpha=0.05):
     Realiza o teste KS, comparando com a distribuição normal padrão e
         cria os gráficos correspondentes.
     Parâmetros:
-        residuos - numpy.ndarray contendo os resíduos da regressão linear
-        plot - imprime o gráfico KS - default=True
-        alpha - valor para comparação com o p-valor - default=0.05
+        model : statsmodels.regression.linear_model.RegressionResultsWrapper
+            Modelo de regressão ajustado
+        plot : Boolean, opcional
+            imprime o gráfico KS - default=True
+        alpha : float, opcional
+            valor para comparação com o p-valor - default=0.05
     '''
     residuos, fitted = extrai_dados(model)
     KS_statistic, KS_p_value = stats.kstest(residuos, 'norm')  # 'norm' = distribuição normal padrão
@@ -60,11 +130,14 @@ def shapiro_test(model, alpha = 0.05):
     '''
     Realiza o teste de normalidade de Shapiro-Wilk
     Parâmetros:
-        residuos - numpy.ndarray contendo os resíduos da regressão linear
-        alpha - valor para comparação com o p-valor - default=0.05
+        model : statsmodels.regression.linear_model.RegressionResultsWrapper
+            Modelo de regressão ajustado
+        alpha : float, opcional
+            valor para comparação com o p-valor - default=0.05
     '''
     residuos, fitted = extrai_dados(model)
 
+    # Teste para normalidade
     sh_statistic, sh_p_value = stats.shapiro(residuos)
     
     result = f'Shapiro-Wilk;{sh_statistic:.4f};{sh_p_value:.4f};H0=Distr Normal -> '
@@ -75,6 +148,45 @@ def shapiro_test(model, alpha = 0.05):
     else:
         result = f'{result}Rejeitar'
 
+    return(result)
+
+
+def anderson_tests(model, rigor=2, vprint=False):
+    '''
+    Realiza o teste KS, comparando com a distribuição normal padrão e
+        cria os gráficos correspondentes.
+    Parâmetros:
+        model : statsmodels.regression.linear_model.RegressionResultsWrapper
+            Modelo de regressão ajustado
+        rigor : Inteiro, opcional
+            Informa o nível de significância a ser adotado
+             0 - 15% (menos rigoroso)
+             1 - 10%
+             2 - 5% (mais usado)
+             3 - 2.5%
+             4 - 1 (mais rigoroso)
+        print : boolean, opcional
+            Imprime oa valores críticos e níveis de significância
+    '''
+
+    residuos, fitted = extrai_dados(model)
+    
+    # Teste para normalidade
+    resultado = stats.anderson(residuos, dist='norm')
+
+    result = f'Anderson-Darling;{resultado.statistic:.4f};{resultado.critical_values[rigor]:.4f};H0=Distr Normal -> '
+    
+    if vprint:    
+        print("Valores críticos:", resultado.critical_values)
+        print("Níveis de significância (%):", resultado.significance_level)
+    
+    # Interpretação
+    if resultado.statistic > resultado.critical_values[rigor]:  # Compara com o valor crítico para 5%
+        result = f'{result}Rejeitar'
+    else:
+        result = f'{result}Não rejeitar'
+    result = f'{result};{resultado.significance_level[rigor]}%'
+        
     return(result)
 
 def extrai_dados(model):
