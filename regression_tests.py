@@ -170,7 +170,8 @@ def extrai_dados(model):
 
     return(residuos, fitted)
 
-def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'leverage','KS'], n_cols=2, figsize=(0, 0)):
+def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'cook','leverage','KS'], 
+                     n_cols=2, figsize=(0, 0)):
     """
     Cria subplots dinâmicos com os gráficos de diagnóstico selecionados.
     
@@ -198,6 +199,7 @@ def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'leverage'
         'qq': (plot_qq, (residuos,)),
         'hist': (plot_hist_residuos, (residuos,)),
         'scale': (plot_scale_location, (fitted, residuos)),
+        'cook':  (plot_cook, (residuos, cooks_distance)),
         'leverage': (plot_leverage, (residuos, leverage, cooks_distance)),
         'KS':(plot_KS, (fitted, residuos))
     }
@@ -305,4 +307,10 @@ def plot_leverage(residuos, leverage, cooks_distance, ax):
     ax.set_ylabel('Resíduos')
     ax.legend(fontsize = 8)
 
-
+def plot_cook(residuos,  cooks_distance, ax):
+    ''' Gráfico com a distância de Cook'''
+    ax.stem(cooks_distance,linefmt=':')
+    ax.axhline(y=4/len(residuos), color='r', linestyle='--')  # Limiar
+    ax.set_xlabel('Resíduos')
+    ax.set_ylabel('Distância de Cook')
+    ax.set_title('Distância de Cook')
