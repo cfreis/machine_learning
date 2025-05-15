@@ -207,7 +207,6 @@ def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale'
     
     # Filtra apenas os plots solicitados, existentes e não duplicados#
     valid_plots = list(dict.fromkeys(p for p in plots if p in plot_functions))
-    #valid_plots = [p for p in plots if p in plot_functions]
     n_plots = len(valid_plots)
     invalid_plots = [p for p in plots if p not in plot_functions]
     all_plots = [p for p in plot_functions]
