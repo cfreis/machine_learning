@@ -6,7 +6,7 @@ import seaborn as sns
 from statsmodels.graphics.gofplots import qqplot 
 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import OLSInfluence
-
+import warnings
 
 sns.set_style("whitegrid")
 
@@ -171,7 +171,7 @@ def extrai_dados(model):
     return(residuos, fitted)
 
 def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale', 'cook','leverage','KS'], 
-                     n_cols=2, figsize=(0, 0)):
+                     n_cols=2, figsize=None, save_path = None, return_fig=False):
     """
     Cria subplots dinâmicos com os gráficos de diagnóstico selecionados.
     
@@ -205,18 +205,30 @@ def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale'
         'KS':(plot_KS, (fitted, residuos))
     }
     
-    # Filtra apenas os plots solicitados e existentes
-    valid_plots = [p for p in plots if p in plot_functions]
+    # Filtra apenas os plots solicitados, existentes e não duplicados
+    valid_plots = list(dict.fromkeys(p for p in plots if p in plot_functions))
+    #valid_plots = [p for p in plots if p in plot_functions]
     n_plots = len(valid_plots)
+    invalid_plots = [p for p in plots if p not in plot_functions]
+    all_plots = [p for p in plot_functions]
     
+    if invalid_plots:
+        warnings.warn(
+            f'Plots inválidos detectados e ignorados: {invalid_plots}.\n'
+            f'Opções válidas: {all_plots}',
+        category=UserWarning,
+        stacklevel=2  )
     if n_plots == 0:
-        raise ValueError("Nenhum gráfico válido selecionado. Opções: 'residuos', 'qq', 'hist', 'scale', 'leverage'")
+        raise ValueError(f'Nenhum gráfico válido selecionado. \n'
+                         f'Opções válidas: {all_plots}')
     
     # Configura layout dos subplots
     n_cols = min(n_cols, n_plots)
     n_rows = int(np.ceil(n_plots / n_cols))
-    if figsize[0] == 0:
-        figsize = (n_cols*5,n_rows*4)
+    if figsize is None:
+        base_width = 5
+        base_height = 4
+        figsize = (n_cols*base_width,n_rows*base_height)
     
     fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
     if n_plots == 1:
@@ -236,8 +248,14 @@ def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale'
         axes_flat[j].axis('off')
     
     plt.tight_layout()
+    if save_path is not None:
+        try:
+            fig.savefig(save_path, bbox_inches='tight', dpi=300)
+        except:
+            print('Falha ao salvar a figura. Verifique se o caminho informado é válido.')
     plt.show()
-
+    if return_fig:
+        return(fig)
 
 def plot_KS(fitted, residuos, ax):
     # Calcular CDF empírica e teórica
