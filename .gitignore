@@ -3,3 +3,4 @@ reg_lin_latex/
 *.log
 testes.py
 __pycache__/
+colabs/
