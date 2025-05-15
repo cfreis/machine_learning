@@ -170,7 +170,7 @@ def extrai_dados(model):
 
     return(residuos, fitted)
 
-def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'cook','leverage','KS'], 
+def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale', 'cook','leverage','KS'], 
                      n_cols=2, figsize=(0, 0)):
     """
     Cria subplots dinâmicos com os gráficos de diagnóstico selecionados.
@@ -195,6 +195,7 @@ def diagnostic_plots(model, plots=['residuos', 'qq', 'hist', 'scale', 'cook','le
     
     # Mapeamento das funções de plot
     plot_functions = {
+        'regressao':(plot_regression,(model,)),
         'residuos': (plot_residuos_vs_ajustados, (fitted, residuos)),
         'qq': (plot_qq, (residuos,)),
         'hist': (plot_hist_residuos, (residuos,)),
@@ -298,7 +299,7 @@ def plot_leverage(residuos, leverage, cooks_distance, ax):
     """Gráfico de Leverage"""
     sns.scatterplot(x=leverage, y=residuos, size=cooks_distance,
                    sizes=(50, 200), alpha=0.6, ax=ax)
-    ax.axhline(0, color='gray', linestyle='--', linewidth=0.5)
+    ax.axhline(0, color='green', linestyle='--', linewidth=0.8)
     k = 2  # Número de parâmetros (intercepto + X)
     n = len(residuos)
     ax.axvline(2 * k / n, color='red', linestyle=':', label='Limite Leverage')
@@ -314,3 +315,86 @@ def plot_cook(residuos,  cooks_distance, ax):
     ax.set_xlabel('Resíduos')
     ax.set_ylabel('Distância de Cook')
     ax.set_title('Distância de Cook')
+
+# def plot_regression(model,ax):
+#     # Recuperar X (com constante)
+#     X_with_const = model.model.exog  
+#     # Remove a constante
+#     X_original = X_with_const[:, 1:]
+#     # Recuperar y
+#     y_original = model.model.endog 
+
+#     predictions = model.get_prediction(X_with_const)
+#     pred_df = predictions.summary_frame(alpha=0.05)  # 95% CI   
+    
+#     # Plot
+#     plt.figure(figsize=(10, 6))
+#     plt.scatter(X_original, y_original, color='blue', label='Dados', alpha=0.6)
+#     plt.plot(X_original, model.predict(X_with_const), 'r-', label='Regressão')
+#     plt.fill_between(
+#         X_original,
+#         pred_df['obs_ci_lower'],
+#         pred_df['obs_ci_upper'],
+#         color='gray',
+#         alpha=0.2,
+#         label='IC 95%'
+#     )
+#     plt.xlabel('Variável independente')
+#     plt.ylabel('Variável dependente')
+#     plt.legend()
+#     plt.grid()
+
+def plot_regression(model, ax=None):
+    """
+    Plota a regressão linear com intervalo de confiança.
+    Para regressão simples: mostra o gráfico de X vs Y.
+    Para regressão múltipla: mostra o gráfico de valores ajustados vs observados.
+    """
+    if ax is None:
+        ax = plt.gca()
+    
+    # Recuperar dados do modelo
+    X_with_const = model.model.exog
+    y_original = model.model.endog
+    
+    # Verifica se é regressão simples (apenas 1 variável independente + constante)
+    if X_with_const.shape[1] == 2:  # 1 variável + constante
+        X_original = X_with_const[:, 1]  # Pega apenas a coluna da variável (exclui constante)
+        
+        # Previsões e intervalo de confiança
+        predictions = model.get_prediction(X_with_const)
+        pred_df = predictions.summary_frame(alpha=0.05)
+        
+        # Ordena os valores para plotar a linha suave
+        sorted_idx = np.argsort(X_original)
+        X_sorted = X_original[sorted_idx]
+        y_pred_sorted = model.fittedvalues[sorted_idx]
+        ci_lower_sorted = pred_df['obs_ci_lower'][sorted_idx]
+        ci_upper_sorted = pred_df['obs_ci_upper'][sorted_idx]
+        
+        # Plot
+        ax.scatter(X_original, y_original, color='blue', alpha=0.6, label='Dados')
+        ax.plot(X_sorted, y_pred_sorted, 'r-', label='Regressão')
+        ax.fill_between(
+            X_sorted,
+            ci_lower_sorted,
+            ci_upper_sorted,
+            color='gray',
+            alpha=0.2,
+            label='IC 95%'
+        )
+        ax.set_xlabel('Variável Independente')
+        ax.set_ylabel('Variável Dependente')
+        
+    else:  # Regressão múltipla
+        y_pred = model.fittedvalues
+        ax.scatter(y_pred, y_original, color='blue', alpha=0.6, label='Observado vs Ajustado')
+        ax.plot([y_original.min(), y_original.max()], 
+                [y_original.min(), y_original.max()], 
+                'r--', label='Linha de Igualdade')
+        ax.set_xlabel('Valores Ajustados')
+        ax.set_ylabel('Valores Observados')
+    
+    ax.legend()
+    ax.grid(True)
+    ax.set_title('Gráfico da Regressão')
