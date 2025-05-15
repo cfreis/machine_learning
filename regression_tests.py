@@ -334,34 +334,6 @@ def plot_cook(residuos,  cooks_distance, ax):
     ax.set_ylabel('Distância de Cook')
     ax.set_title('Distância de Cook')
 
-# def plot_regression(model,ax):
-#     # Recuperar X (com constante)
-#     X_with_const = model.model.exog  
-#     # Remove a constante
-#     X_original = X_with_const[:, 1:]
-#     # Recuperar y
-#     y_original = model.model.endog 
-
-#     predictions = model.get_prediction(X_with_const)
-#     pred_df = predictions.summary_frame(alpha=0.05)  # 95% CI   
-    
-#     # Plot
-#     plt.figure(figsize=(10, 6))
-#     plt.scatter(X_original, y_original, color='blue', label='Dados', alpha=0.6)
-#     plt.plot(X_original, model.predict(X_with_const), 'r-', label='Regressão')
-#     plt.fill_between(
-#         X_original,
-#         pred_df['obs_ci_lower'],
-#         pred_df['obs_ci_upper'],
-#         color='gray',
-#         alpha=0.2,
-#         label='IC 95%'
-#     )
-#     plt.xlabel('Variável independente')
-#     plt.ylabel('Variável dependente')
-#     plt.legend()
-#     plt.grid()
-
 def plot_regression(model, ax=None):
     """
     Plota a regressão linear com intervalo de confiança.
