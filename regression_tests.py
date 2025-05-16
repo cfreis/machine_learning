@@ -6,12 +6,14 @@ import seaborn as sns
 from statsmodels.graphics.gofplots import qqplot 
 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import OLSInfluence
-import warnings
+#import warnings
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+from statsmodels.tools.tools import add_constant
 
 sns.set_style("whitegrid")
 
 
-def test_residues(model, tests=['KS', 'Shapiro', 'Anderson'], alpha=0.05, rigor=2, plot=True, vprint=False):
+def test_residues(model, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, rigor=2, plot=True, vprint=False):
     """
     Realiza múltiplos testes de normalidade nos resíduos e retorna um DataFrame consolidado.
     
@@ -20,7 +22,7 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson'], alpha=0.05, rigor=
     model : statsmodels.regression.linear_model.RegressionResultsWrapper
         Modelo de regressão ajustado
     tests : list, optional
-        Lista dos testes a serem realizados ('KS', 'Shapiro', 'Anderson')
+        Lista dos testes a serem realizados ('KS', 'Shapiro', 'Anderson','VIF')
     alpha : float, optional
         Nível de significância para KS e Shapiro-Wilk (default=0.05)
     rigor : int, optional
@@ -36,6 +38,7 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson'], alpha=0.05, rigor=
         DataFrame com colunas: ['Teste', 'Estatística', 'Valor_Referência', 'Resultado']
     """
     results = []
+    VIF_result = None
     
     if 'KS' in tests:
         ks_result = KS_test(model, alpha=alpha)
@@ -60,7 +63,7 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson'], alpha=0.05, rigor=
         })
     
     if 'Anderson' in tests:
-        anderson_result = anderson_tests(model, rigor=rigor, vprint=vprint)
+        anderson_result = anderson_test(model, rigor=rigor, vprint=vprint)
         teste, estatistica, valor_ref, resultado, signif = anderson_result.split(';')
         results.append({
             'Teste': teste,
@@ -72,8 +75,35 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson'], alpha=0.05, rigor=
     
     # Cria DataFrame
     df_results = pd.DataFrame(results)
+    print(df_results)
     
-    return df_results
+    return (df_results)
+
+def VIF_test(model):    
+    # Recupera dados do modelo
+    X_with_const = model.model.exog
+    if X_with_const.shape[1] == 2:  # 1 variável + constante
+        print('Regressão linear simples - Não será calculado o VIF')
+        return
+
+        
+
+    X_original = pd.DataFrame(X_with_const[:, 1:])  # Pega apenas a coluna da variável (exclui constante)
+    variable_names = model.params.index.tolist()    
+    X_original.columns = variable_names[1:]
+    # Calcula VIF para cada variável
+    vif_data = pd.DataFrame()
+    vif_data["Variável"] = X_original.columns
+    vif_data["VIF"] = [variance_inflation_factor(X_original.values, i) for i in range(X_original.shape[1])]
+    vif_data["Tolerância"] = 1 / vif_data["VIF"]  # Tolerância = 1/VIF
+    vif_data["Resultado"] = np.where(
+        vif_data["Tolerância"] < 0.1,
+        "Possível multicolinearidade",  # Value if condition is True
+        "OK"                           # Value if condition is False
+    )
+    
+    print(vif_data)
+    return(vif_data)
 
 
 def KS_test(model, alpha=0.05):
@@ -126,7 +156,7 @@ def shapiro_test(model, alpha = 0.05):
     return(result)
 
 
-def anderson_tests(model, rigor=2, vprint=False):
+def anderson_test(model, rigor=2, vprint=False):
     '''
     Realiza o teste KS, comparando com a distribuição normal padrão e
         cria os gráficos correspondentes.
@@ -212,11 +242,8 @@ def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale'
     all_plots = [p for p in plot_functions]
     
     if invalid_plots:
-        warnings.warn(
-            f'Plots inválidos detectados e ignorados: {invalid_plots}.\n'
-            f'Opções válidas: {all_plots}',
-        category=UserWarning,
-        stacklevel=2  )
+        print(f'Plots inválidos detectados e ignorados: {invalid_plots}.\n'
+            f'Opções válidas: {all_plots}')
     if n_plots == 0:
         raise ValueError(f'Nenhum gráfico válido selecionado. \n'
                          f'Opções válidas: {all_plots}')
