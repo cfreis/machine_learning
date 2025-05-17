@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri May  9 14:41:36 2025
+
+@author: Clovis F Reis
+
+
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -10,17 +20,52 @@ from statsmodels.stats.outliers_influence import OLSInfluence
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.tools.tools import add_constant
 
+__all__ = ['test_residues',
+           'diagnostic_plots',
+           'VIF_test']
+
 sns.set_style("whitegrid")
 
+def _cria_modelo(df):
+    y = df.iloc[:,0]
+    df1 = df.iloc[:,1:]
+    df1 = sm.add_constant(df1)
+    model = sm.OLS(y, df1).fit()
+    return(df, model)
 
-def test_residues(model, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, rigor=2, plot=True, vprint=False):
+def _prepare_data(data):
+    '''prepara os dados de forma a padronizar as entradas
+        Entradas possíveis são:
+            Dicionário, Dataframe ou modelo OLS
+        Retorna um dataframe contendo Y, os X e a constante, mais um modelo OLS
+    '''
+    
+    if isinstance(data, pd.DataFrame):
+        df, model = _cria_modelo(data)
+    elif isinstance(data, dict):
+        df = pd.DataFrame(data)
+        df, model = _cria_modelo(df)
+    elif "statsmodels.regression.linear_model.RegressionResultsWrapper" in str(type(data)):  # Verifica se é algo do statsmodels
+        df = None
+        model = data
+        
+    return(df,model)
+    
+   
+
+
+
+
+
+def test_residues(data, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, rigor=2, plot=True, vprint=False):
     """
     Realiza múltiplos testes de normalidade nos resíduos e retorna um DataFrame consolidado.
     
     Parâmetros:
     -----------
-    model : statsmodels.regression.linear_model.RegressionResultsWrapper
-        Modelo de regressão ajustado
+    data : statsmodels.regression.linear_model.RegressionResultsWrapper
+        Modelo de regressão ajustado;
+            dicionário ou dataframe contendo os dados
     tests : list, optional
         Lista dos testes a serem realizados ('KS', 'Shapiro', 'Anderson','VIF')
     alpha : float, optional
@@ -37,11 +82,13 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, 
     pd.DataFrame
         DataFrame com colunas: ['Teste', 'Estatística', 'Valor_Referência', 'Resultado']
     """
+    
+    df, model = _prepare_data(data)
     results = []
     VIF_result = None
     
     if 'KS' in tests:
-        ks_result = KS_test(model, alpha=alpha)
+        ks_result = _KS_test(model, alpha=alpha)
         teste, estatistica, valor_ref, resultado = ks_result.split(';')
         results.append({
             'Teste': teste,
@@ -52,7 +99,7 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, 
         })
     
     if 'Shapiro' in tests:
-        shapiro_result = shapiro_test(model, alpha=alpha)
+        shapiro_result = _shapiro_test(model, alpha=alpha)
         teste, estatistica, valor_ref, resultado = shapiro_result.split(';')
         results.append({
             'Teste': teste,
@@ -63,7 +110,7 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, 
         })
     
     if 'Anderson' in tests:
-        anderson_result = anderson_test(model, rigor=rigor, vprint=vprint)
+        anderson_result = _anderson_test(model, rigor=rigor, vprint=vprint)
         teste, estatistica, valor_ref, resultado, signif = anderson_result.split(';')
         results.append({
             'Teste': teste,
@@ -79,7 +126,10 @@ def test_residues(model, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, 
     
     return (df_results)
 
-def VIF_test(model):    
+def VIF_test(data):    
+    
+    df, model = _prepare_data(data)
+
     # Recupera dados do modelo
     X_with_const = model.model.exog
     if X_with_const.shape[1] == 2:  # 1 variável + constante
@@ -96,17 +146,23 @@ def VIF_test(model):
     vif_data["Variável"] = X_original.columns
     vif_data["VIF"] = [variance_inflation_factor(X_original.values, i) for i in range(X_original.shape[1])]
     vif_data["Tolerância"] = 1 / vif_data["VIF"]  # Tolerância = 1/VIF
-    vif_data["Resultado"] = np.where(
-        vif_data["Tolerância"] < 0.1,
-        "Possível multicolinearidade",  # Value if condition is True
-        "OK"                           # Value if condition is False
-    )
-    
+    vif_data["Multicolinearidade"] = np.select(
+        condlist=[
+            vif_data["Tolerância"] >= 0.2,                
+            (vif_data["Tolerância"] >= 0.1) & (vif_data["Tolerância"] < 0.2),  
+            vif_data["Tolerância"] < 0.1                
+        ],
+        choicelist=[
+            "      Ausente     ",               
+            "      Moderada    ",       
+            "      Severa      "    
+        ],
+        default="Ocorreu um erro  - valor fora das faixas" )   
     print(vif_data)
     return(vif_data)
 
 
-def KS_test(model, alpha=0.05):
+def _KS_test(model, alpha=0.05):
     '''
     Realiza o teste KS, comparando com a distribuição normal padrão e
         cria os gráficos correspondentes.
@@ -116,7 +172,7 @@ def KS_test(model, alpha=0.05):
         alpha : float, opcional
             valor para comparação com o p-valor - default=0.05
     '''
-    residuos, fitted = extrai_dados(model)
+    residuos, fitted = _extrai_dados(model)
     KS_statistic, KS_p_value = stats.kstest(residuos, 'norm')  # 'norm' = distribuição normal padrão
     
     result = f'Kolmogorov-Smirnov;{KS_statistic:.4f};{KS_p_value:.4f};H0=Distr Normal -> '
@@ -131,7 +187,7 @@ def KS_test(model, alpha=0.05):
 
 
 
-def shapiro_test(model, alpha = 0.05):
+def _shapiro_test(model, alpha = 0.05):
     '''
     Realiza o teste de normalidade de Shapiro-Wilk
     Parâmetros:
@@ -140,7 +196,7 @@ def shapiro_test(model, alpha = 0.05):
         alpha : float, opcional
             valor para comparação com o p-valor - default=0.05
     '''
-    residuos, fitted = extrai_dados(model)
+    residuos, fitted = _extrai_dados(model)
 
     # Teste para normalidade
     sh_statistic, sh_p_value = stats.shapiro(residuos)
@@ -156,7 +212,7 @@ def shapiro_test(model, alpha = 0.05):
     return(result)
 
 
-def anderson_test(model, rigor=2, vprint=False):
+def _anderson_test(model, rigor=2, vprint=False):
     '''
     Realiza o teste KS, comparando com a distribuição normal padrão e
         cria os gráficos correspondentes.
@@ -174,7 +230,7 @@ def anderson_test(model, rigor=2, vprint=False):
             Imprime oa valores críticos e níveis de significância
     '''
 
-    residuos, fitted = extrai_dados(model)
+    residuos, fitted = _extrai_dados(model)
     
     # Teste para normalidade
     resultado = stats.anderson(residuos, dist='norm')
@@ -194,21 +250,22 @@ def anderson_test(model, rigor=2, vprint=False):
         
     return(result)
 
-def extrai_dados(model):
+def _extrai_dados(model):
     residuos = model.resid
     fitted = model.fittedvalues
 
     return(residuos, fitted)
 
-def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale', 'cook','leverage','KS'], 
+def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale', 'cook','leverage','KS'], 
                      n_cols=2, figsize=None, save_path = None, return_fig=False):
     """
     Cria subplots dinâmicos com os gráficos de diagnóstico selecionados.
     
     Parâmetros:
     -----------
-    model : statsmodels.regression.linear_model.RegressionResultsWrapper
-        Modelo de regressão ajustado
+    data : statsmodels.regression.linear_model.RegressionResultsWrapper
+        Modelo de regressão ajustado;
+            dicionário ou dataframe contendo os dados
     plots : list, optional
         Lista dos gráficos a incluir (opções: 'residuos', 'qq', 'hist', 'scale', 'leverage','KS')
     n_cols : inteiro, opcional
@@ -216,6 +273,9 @@ def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale'
     figsize : tuple, optional
         Tamanho da figura (largura, altura)
     """
+    
+    df, model = _prepare_data(data)
+
     # Dados do modelo
     fitted = model.fittedvalues
     residuos = model.resid
@@ -225,14 +285,14 @@ def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale'
     
     # Mapeamento das funções de plot
     plot_functions = {
-        'regressao':(plot_regression,(model,)),
-        'residuos': (plot_residuos_vs_ajustados, (fitted, residuos)),
-        'qq': (plot_qq, (residuos,)),
-        'hist': (plot_hist_residuos, (residuos,)),
-        'scale': (plot_scale_location, (fitted, residuos)),
-        'cook':  (plot_cook, (residuos, cooks_distance)),
-        'leverage': (plot_leverage, (residuos, leverage, cooks_distance)),
-        'KS':(plot_KS, (fitted, residuos))
+        'regressao':(_plot_regression,(model,)),
+        'residuos': (_plot_residuos_vs_ajustados, (fitted, residuos)),
+        'qq': (_plot_qq, (residuos,)),
+        'hist': (_plot_hist_residuos, (residuos,)),
+        'scale': (_plot_scale_location, (fitted, residuos)),
+        'cook':  (_plot_cook, (residuos, cooks_distance)),
+        'leverage': (_plot_leverage, (residuos, leverage, cooks_distance)),
+        'KS':(_plot_KS, (fitted, residuos))
     }
     
     # Filtra apenas os plots solicitados, existentes e não duplicados
@@ -283,7 +343,7 @@ def diagnostic_plots(model, plots=['regressao','residuos', 'qq', 'hist', 'scale'
     if return_fig:
         return(fig)
 
-def plot_KS(fitted, residuos, ax):
+def _plot_KS(fitted, residuos, ax):
     # Calcular CDF empírica e teórica
     x = np.linspace(-4, 4, 1000)
     cdf_empirica = np.array([np.sum(residuos <= xx)/len(residuos) for xx in x])
@@ -306,7 +366,7 @@ def plot_KS(fitted, residuos, ax):
     ax.legend()
     
    
-def plot_residuos_vs_ajustados(fitted, residuos, ax):
+def _plot_residuos_vs_ajustados(fitted, residuos, ax):
     """Gráfico de Resíduos vs Valores Ajustados"""
     sns.residplot(x=fitted, y=residuos, lowess=True,
                  scatter_kws={'alpha': 0.6},
@@ -316,20 +376,20 @@ def plot_residuos_vs_ajustados(fitted, residuos, ax):
     ax.set_xlabel('Valores Ajustados')
     ax.set_ylabel('Resíduos')
 
-def plot_qq(residuos, ax):
+def _plot_qq(residuos, ax):
     """Gráfico Q-Q para normalidade"""
     qqplot(residuos, line='s', ax=ax)
     ax.set_title('Q-Q Plot')
     ax.get_lines()[0].set_markersize(4.0)  # Ajusta tamanho dos pontos
 
 
-def plot_hist_residuos(residuos, ax):
+def _plot_hist_residuos(residuos, ax):
     """Histograma dos Resíduos"""
     sns.histplot(residuos, kde=True, ax=ax)
     ax.set_title('Distribuição dos Resíduos')
     ax.set_xlabel('Resíduos')
    
-def plot_scale_location(fitted, residuos, ax):
+def _plot_scale_location(fitted, residuos, ax):
     """Gráfico Scale-Location"""
     residuos_norm = np.sqrt(np.abs(residuos / residuos.std()))
     sns.regplot(x=fitted, y=residuos_norm, lowess=True,
@@ -339,7 +399,7 @@ def plot_scale_location(fitted, residuos, ax):
     ax.set_xlabel('Valores Ajustados')
     ax.set_ylabel('√(|Resíduos Padronizados|)')
 
-def plot_leverage(residuos, leverage, cooks_distance, ax):
+def _plot_leverage(residuos, leverage, cooks_distance, ax):
     """Gráfico de Leverage"""
     sns.scatterplot(x=leverage, y=residuos, size=cooks_distance,
                    sizes=(50, 200), alpha=0.6, ax=ax)
@@ -352,7 +412,7 @@ def plot_leverage(residuos, leverage, cooks_distance, ax):
     ax.set_ylabel('Resíduos')
     ax.legend(fontsize = 8)
 
-def plot_cook(residuos,  cooks_distance, ax):
+def _plot_cook(residuos,  cooks_distance, ax):
     ''' Gráfico com a distância de Cook'''
     ax.stem(cooks_distance,linefmt=':')
     ax.axhline(y=4/len(residuos), color='r', linestyle='--')  # Limiar
@@ -360,7 +420,7 @@ def plot_cook(residuos,  cooks_distance, ax):
     ax.set_ylabel('Distância de Cook')
     ax.set_title('Distância de Cook')
 
-def plot_regression(model, ax=None):
+def _plot_regression(model, ax=None):
     """
     Plota a regressão linear com intervalo de confiança.
     Para regressão simples: mostra o gráfico de X vs Y.
