@@ -94,7 +94,10 @@ def summary(data, beta=False):
         coef_df.iloc[0,1]=''
         
         print(model.summary().tables[0])
-        print(coef_df)
+        print(coef_df.to_string(formatters={
+            col: lambda x: f"{x:.2e}" if pd.api.types.is_float_dtype(df[col]) else x 
+            for col in df.columns
+            }))
         print(model.summary().tables[2])
     
     else:
