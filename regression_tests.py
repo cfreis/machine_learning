@@ -274,9 +274,10 @@ def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale',
     df, model = _prepare_data(data)
     
     #prepara o nome das figuras
-    path, extensao = os.path.splitext(save_path)
-    if extensao == '':
-        extensao = '.png'
+    if save_path is not None:
+        path, extensao = os.path.splitext(save_path)
+        if extensao == '':
+            extensao = '.png'
     # Complemento dos nomes para qdo salvar mais de uma figura
     figs = ['','_reg','_mult']
 
@@ -339,8 +340,12 @@ def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale',
                          f'Opções válidas: {all_plots}')
     
     # Configura layout dos subplots
-    n_cols_calc = min(n_cols, grid_plots)
-    n_rows = int(np.ceil(grid_plots / n_cols_calc))
+    try:
+        n_cols_calc = min(n_cols, grid_plots)
+        n_rows = int(np.ceil(grid_plots / n_cols_calc))
+    except ZeroDivisionError:
+        n_cols_calc = 1
+        n_rows = 1
     if figsize is None:
         base_width = 5
         base_height = 4
