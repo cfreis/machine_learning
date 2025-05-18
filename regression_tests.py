@@ -54,9 +54,53 @@ def _prepare_data(data):
         
     return(df,model)
     
-def summary(data):
+def summary(data, beta=False):
     df, model = _prepare_data(data)
-    print(model.summary())
+    
+    if beta:
+        # Extrai os coeficientes não padronizados (excluindo o intercepto)
+        coef_nao_padronizados = model.params.drop("const")
+        
+        # Calcula os desvios padrão
+        std_X = df.iloc[:,1:].std(ddof=0) # DP das variáveis independentes
+        std_y = df.iloc[:,0].std(ddof=0)                # DP da variável dependente
+
+        # Coeficientes padronizados (beta)
+        coef_padronizados = coef_nao_padronizados * (std_X / std_y)
+        
+        # Adiciona o intercepto (zero, pois y e X são centralizados)
+        coef_padronizados = pd.concat([
+            pd.Series({"const": 0.0}),  # Intercepto padronizado é sempre zero
+            coef_padronizados
+        ])
+        
+        
+        
+        # DataFrame final
+        coef_df = pd.DataFrame({
+            "Variável": coef_padronizados.index,
+            "Coef(B)": model.params,
+            "CoefPad(Beta)": coef_padronizados,
+            "Erro_Padrao": model.bse,
+            "t": model.tvalues,
+            "p-Val": model.pvalues,
+            "IC2.5%": model.conf_int()[0],
+            "IC97.5%": model.conf_int()[1]
+        }).set_index("Variável")
+        
+        coef_df = coef_df.round(3)
+        coef_df["CoefPad(Beta)"] = coef_df["CoefPad(Beta)"].astype(str)
+        
+        coef_df.iloc[0,1]=''
+        
+        print(model.summary().tables[0])
+        print(coef_df)
+        print(model.summary().tables[2])
+    
+    else:
+        print(model.summary())
+
+
     return
 
 def test_residues(data, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, rigor=2, plot=True, vprint=False):
