@@ -24,7 +24,8 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 __all__ = ['test_residues',
            'diagnostic_plots',
-           'VIF_test']
+           'VIF_test',
+           'summary']
 
 sns.set_style("whitegrid")
 
@@ -53,7 +54,10 @@ def _prepare_data(data):
         
     return(df,model)
     
-   
+def summary(data):
+    df, model = _prepare_data(data)
+    print(model.summary())
+    return
 
 def test_residues(data, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, rigor=2, plot=True, vprint=False):
     """
@@ -403,8 +407,7 @@ def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale',
     #             fig_mult, axes_mult = plt.subplots(var_ind, var_ind, figsize=figsize)
     #             plot_func, args = plot_functions[plot_name]
     #             plot_func(*args, ax=axes_reg)
-
-    
+ 
 
     plt.tight_layout()    
     plt.show()
