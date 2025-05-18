@@ -13,12 +13,14 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 import seaborn as sns
-from statsmodels.graphics.gofplots import qqplot 
-import statsmodels.api as sm
-from statsmodels.stats.outliers_influence import OLSInfluence
 #import warnings
-from statsmodels.stats.outliers_influence import variance_inflation_factor
+import os
+import statsmodels.api as sm
 from statsmodels.tools.tools import add_constant
+from statsmodels.graphics.regressionplots import plot_partregress_grid
+from statsmodels.graphics.gofplots import qqplot 
+from statsmodels.stats.outliers_influence import OLSInfluence
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 __all__ = ['test_residues',
            'diagnostic_plots',
@@ -52,10 +54,6 @@ def _prepare_data(data):
     return(df,model)
     
    
-
-
-
-
 
 def test_residues(data, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, rigor=2, plot=True, vprint=False):
     """
@@ -256,7 +254,7 @@ def _extrai_dados(model):
 
     return(residuos, fitted)
 
-def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale', 'cook','leverage','KS'], 
+def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale', 'cook','leverage','KS','multicol'], 
                      n_cols=2, figsize=None, save_path = None, return_fig=False):
     """
     Cria subplots dinâmicos com os gráficos de diagnóstico selecionados.
@@ -267,15 +265,24 @@ def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale',
         Modelo de regressão ajustado;
             dicionário ou dataframe contendo os dados
     plots : list, optional
-        Lista dos gráficos a incluir (opções: 'residuos', 'qq', 'hist', 'scale', 'leverage','KS')
+        Lista dos gráficos a incluir (opções: 'residuos', 'qq', 'hist', 'scale', 'leverage','KS','multicol')
     n_cols : inteiro, opcional
         Túmero de colunas de gráficos no sub-plot. Default=2
     figsize : tuple, optional
         Tamanho da figura (largura, altura)
     """
-    
     df, model = _prepare_data(data)
+    
+    #prepara o nome das figuras
+    path, extensao = os.path.splitext(save_path)
+    if extensao == '':
+        extensao = '.png'
+    # Complemento dos nomes para qdo salvar mais de uma figura
+    figs = ['','_reg','_mult']
 
+    # número de variáveis independentes
+    var_ind = df.shape[1] -1
+    
     # Dados do modelo
     fitted = model.fittedvalues
     residuos = model.resid
@@ -285,19 +292,42 @@ def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale',
     
     # Mapeamento das funções de plot
     plot_functions = {
-        'regressao':(_plot_regression,(model,)),
+        'regressao':(_plot_regression,(model,df,var_ind)),
         'residuos': (_plot_residuos_vs_ajustados, (fitted, residuos)),
         'qq': (_plot_qq, (residuos,)),
         'hist': (_plot_hist_residuos, (residuos,)),
         'scale': (_plot_scale_location, (fitted, residuos)),
         'cook':  (_plot_cook, (residuos, cooks_distance)),
         'leverage': (_plot_leverage, (residuos, leverage, cooks_distance)),
-        'KS':(_plot_KS, (fitted, residuos))
+        'KS':(_plot_KS, (fitted, residuos)),
+        'multicol': (_plot_multicol,(df,))
     }
     
     # Filtra apenas os plots solicitados, existentes e não duplicados
     valid_plots = list(dict.fromkeys(p for p in plots if p in plot_functions))
+    # gráfico de multicolinearidade é sempre exclusivo e só é criado se 
+    # var_ind > 1
     n_plots = len(valid_plots)
+    multi = False
+    regr = False
+    
+    # Adequa o tamanho do grid da figura aos graficos
+    # Gráficos de multicolinearidade só será impresso para 2 ou mais var independentes
+    # O gráfico de regressão é impresso junto com os outros se há somente uma var independ
+    # e separado se há 2 ou mais
+    if ('multicol' in valid_plots):
+        valid_plots.remove('multicol')
+        if var_ind > 1:
+            multi = True
+        else:
+            print('Gráfico de multicolinearidade não será exibido, pois há somente uma variável independente')
+  
+    if ('regressao' in valid_plots) and (var_ind > 1):
+        valid_plots.remove('regressao')
+        regr = True
+
+    grid_plots = len(valid_plots)
+
     invalid_plots = [p for p in plots if p not in plot_functions]
     all_plots = [p for p in plot_functions]
     
@@ -309,36 +339,69 @@ def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale',
                          f'Opções válidas: {all_plots}')
     
     # Configura layout dos subplots
-    n_cols = min(n_cols, n_plots)
-    n_rows = int(np.ceil(n_plots / n_cols))
+    n_cols_calc = min(n_cols, grid_plots)
+    n_rows = int(np.ceil(grid_plots / n_cols_calc))
     if figsize is None:
         base_width = 5
         base_height = 4
-        figsize = (n_cols*base_width,n_rows*base_height)
+        figsize = (n_cols_calc*base_width,n_rows*base_height)
     
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
-    if n_plots == 1:
+    fig, axes = plt.subplots(n_rows, n_cols_calc, figsize=figsize)
+    if grid_plots == 1:
         axes = np.array([axes])  # Garante que axes seja sempre um array
         
-    # Achata o array de eixos para facilitar iteração
+    # Achata o array de axes para facilitar iteração
     axes_flat = axes.flatten() if isinstance(axes, np.ndarray) else [axes]
     
     # Gera cada gráfico
-    for i, plot_name in enumerate(valid_plots):
-        ax = axes_flat[i]
+    idx_ax = 0
+    # for i, plot_name in enumerate(valid_plots):
+    while idx_ax < grid_plots:
+        plot_name = valid_plots[idx_ax]
+        if (plot_name == 'regressao') and (regr):
+            continue
+
+        ax = axes_flat[idx_ax]
         plot_func, args = plot_functions[plot_name]
         plot_func(*args, ax=ax)
-    
-    # Remove eixos vazios
-    for j in range(i+1, len(axes_flat)):
+        idx_ax = idx_ax + 1
+
+   # Remove eixos vazios
+    for j in range(idx_ax, len(axes_flat)):
         axes_flat[j].axis('off')
     
-    plt.tight_layout()
+    if regr:
+        fig_reg = plot_partregress_grid(model, fig=plt.figure(figsize=(12, 8)))
+        fig_reg.suptitle("Efeitos Parciais das Variáveis Independentes", fontsize=16,y=1.05)
+
+    
+    if multi:
+        fig_multi = sns.pairplot(df.iloc[:,1:], kind='reg',diag_kind='hist',plot_kws={'line_kws':{'color':'red'}})
+        fig_multi.fig.suptitle("Análise de Multicolinearidade", fontsize=16,y=1.05)
+        #fig_multi.fig.subplots_adjust(top=0.1) 
     if save_path is not None:
         try:
-            fig.savefig(save_path, bbox_inches='tight', dpi=300)
+            fig_name = f'{path}{figs[0]}{extensao}'
+            fig.savefig(fig_name, bbox_inches='tight', dpi=300)
+            if regr:
+                fig_name = f'{path}{figs[1]}{extensao}'
+                fig_reg.savefig(fig_name, bbox_inches='tight', dpi=300)
+            if multi:
+                fig_name = f'{path}{figs[2]}{extensao}'
+                fig_multi.savefig(fig_name, bbox_inches='tight', dpi=300)
         except:
             print('Falha ao salvar a figura. Verifique se o caminho informado é válido.')
+
+    #     # gráfico de multicolinearidade somente se há mais de 1 var independente
+    #     if plot_name == 'multicol':
+    #         if var_ind > 1:
+    #             fig_mult, axes_mult = plt.subplots(var_ind, var_ind, figsize=figsize)
+    #             plot_func, args = plot_functions[plot_name]
+    #             plot_func(*args, ax=axes_reg)
+
+    
+
+    
     plt.show()
     if return_fig:
         return(fig)
@@ -420,57 +483,93 @@ def _plot_cook(residuos,  cooks_distance, ax):
     ax.set_ylabel('Distância de Cook')
     ax.set_title('Distância de Cook')
 
-def _plot_regression(model, ax=None):
+def _plot_regression_loop(model,x, x_name, y, y_name, ax):
+    
+    # Previsões e intervalo de confiança
+    Xwith_const = model.model.exog
+    predictions = model.get_prediction(Xwith_const)
+    pred_df = predictions.summary_frame(alpha=0.05)
+    
+    # Ordena os valores para plotar a linha suave
+    sorted_idx = np.argsort(x)
+    x = x[sorted_idx]
+    y_pred_sorted = model.fittedvalues[sorted_idx]
+    ci_lower_sorted = pred_df['obs_ci_lower'][sorted_idx]
+    ci_upper_sorted = pred_df['obs_ci_upper'][sorted_idx]
+    
+    # Plot
+    ax.scatter(x, y, color='blue', alpha=0.6, label='Dados')
+    ax.plot(x, y_pred_sorted, 'r-', label='Regressão')
+    ax.fill_between(
+        x,
+        ci_lower_sorted,
+        ci_upper_sorted,
+        color='gray',
+        alpha=0.2,
+        label='IC 95%'
+    )
+    ax.set_xlabel(x_name)
+    ax.set_ylabel(y_name)
+
+# def _plot_regr_multi(model,df, var_ind,n_cols,figsize,ax):
+#     n_cols_reg = min(n_cols, var_ind)
+#     n_rows_reg = int(np.ceil(var_ind / n_cols_reg))
+#     fig_reg, axes_reg = plt.subplots(n_rows_reg,n_cols_reg, figsize=figsize)
+#     # plot_func, args = plot_functions[plot_name]
+#     # plot_func(*args, ax=axes_reg)
+
+#     X = df.iloc[:,1:]
+#     X_names = df.columns[1:]
+#     y = df.iloc[:,0]
+#     y_name = df.columns[0]
+    
+#     fig, axes = plt.subplots(n_cols_reg, n_rows_reg, figsize=figsize)
+        
+#     # Achata o array de axes para facilitar iteração
+#     axes_flat = axes.flatten() if isinstance(axes, np.ndarray) else [axes]
+    
+#     # Gera cada gráfico
+#     idx_ax = 0
+#     # for i, plot_name in enumerate(valid_plots):
+#     while idx_ax < var_ind:
+#         x = X[:,idx_ax]
+#         x_name = X_names[idx_ax]
+#         ax = axes_flat[idx_ax]
+#         _plot_regression_loop(model,x, x_name, y, y_name, ax)
+#         idx_ax = idx_ax + 1
+
+#    # Remove eixos vazios
+#     for j in range(idx_ax, len(axes_flat)):
+#         axes_flat[j].axis('off')
+
+#     plt.show()
+
+def _plot_regression(model,df, var_ind, ax):
     """
     Plota a regressão linear com intervalo de confiança.
     Para regressão simples: mostra o gráfico de X vs Y.
     Para regressão múltipla: mostra o gráfico de valores ajustados vs observados.
     """
-    if ax is None:
-        ax = plt.gca()
-    
+
     # Recuperar dados do modelo
-    X_with_const = model.model.exog
-    y_original = model.model.endog
+    # Xwith_const = model.model.exog
+    # y_original = model.model.endog
+    
+    if var_ind < 1:
+        raise ValueError('Há alguma inconsistência nos dados. Por favor verifique.')
+        
     
     # Verifica se é regressão simples (apenas 1 variável independente + constante)
-    if X_with_const.shape[1] == 2:  # 1 variável + constante
-        X_original = X_with_const[:, 1]  # Pega apenas a coluna da variável (exclui constante)
-        
-        # Previsões e intervalo de confiança
-        predictions = model.get_prediction(X_with_const)
-        pred_df = predictions.summary_frame(alpha=0.05)
-        
-        # Ordena os valores para plotar a linha suave
-        sorted_idx = np.argsort(X_original)
-        X_sorted = X_original[sorted_idx]
-        y_pred_sorted = model.fittedvalues[sorted_idx]
-        ci_lower_sorted = pred_df['obs_ci_lower'][sorted_idx]
-        ci_upper_sorted = pred_df['obs_ci_upper'][sorted_idx]
-        
-        # Plot
-        ax.scatter(X_original, y_original, color='blue', alpha=0.6, label='Dados')
-        ax.plot(X_sorted, y_pred_sorted, 'r-', label='Regressão')
-        ax.fill_between(
-            X_sorted,
-            ci_lower_sorted,
-            ci_upper_sorted,
-            color='gray',
-            alpha=0.2,
-            label='IC 95%'
-        )
-        ax.set_xlabel('Variável Independente')
-        ax.set_ylabel('Variável Dependente')
-        
-    else:  # Regressão múltipla
-        y_pred = model.fittedvalues
-        ax.scatter(y_pred, y_original, color='blue', alpha=0.6, label='Observado vs Ajustado')
-        ax.plot([y_original.min(), y_original.max()], 
-                [y_original.min(), y_original.max()], 
-                'r--', label='Linha de Igualdade')
-        ax.set_xlabel('Valores Ajustados')
-        ax.set_ylabel('Valores Observados')
+    if var_ind == 1:  # 1 variável independente
+        x = df.iloc[:,1]
+        x_name = df.columns[1]
+        y = df.iloc[:,0]
+        y_name = df.columns[0]
+        _plot_regression_loop(model,x, x_name, y, y_name, ax)
     
     ax.legend()
     ax.grid(True)
     ax.set_title('Gráfico da Regressão')
+    
+def _plot_multicol(df):
+    return 0
