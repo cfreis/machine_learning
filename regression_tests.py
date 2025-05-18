@@ -406,7 +406,7 @@ def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale',
 
     
 
-    
+    plt.tight_layout()    
     plt.show()
     if return_fig:
         return(fig)
