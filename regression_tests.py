@@ -80,8 +80,8 @@ def summary(data, beta=False):
         coef_df = pd.DataFrame({
             "Variável": coef_padronizados.index,
             "Coef(B)": model.params,
-            "CoefPad(Beta)": coef_padronizados,
-            "Erro_Padrao": model.bse,
+            "CPad(Beta)": coef_padronizados,
+            "Erro_Pad": model.bse,
             "t": model.tvalues,
             "p-Val": model.pvalues,
             "IC2.5%": model.conf_int()[0],
@@ -89,15 +89,12 @@ def summary(data, beta=False):
         }).set_index("Variável")
         
         coef_df = coef_df.round(3)
-        coef_df["CoefPad(Beta)"] = coef_df["CoefPad(Beta)"].astype(str)
+        coef_df["CPad(Beta)"] = coef_df["CPad(Beta)"].astype(str)
         
         coef_df.iloc[0,1]=''
         
         print(model.summary().tables[0])
-        print(coef_df.to_string(formatters={
-            col: lambda x: f"{x:.2e}" if pd.api.types.is_float_dtype(df[col]) else x 
-            for col in df.columns
-            }))
+        print(coef_df)
         print(model.summary().tables[2])
     
     else:
