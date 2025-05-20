@@ -96,12 +96,13 @@ def summary(data, beta=False):
         print(model.summary().tables[0])
         print(coef_df)
         print(model.summary().tables[2])
+        print(model.summary().extra_txt)
     
     else:
         print(model.summary())
 
 
-    return
+    return(model)
 
 def test_residues(data, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, rigor=2, plot=True, vprint=False):
     """
@@ -170,7 +171,7 @@ def test_residues(data, tests=['KS', 'Shapiro', 'Anderson','VIF'], alpha=0.05, r
     df_results = pd.DataFrame(results)
     print(df_results)
     
-    return (df_results)
+    return (model)
 
 def VIF_test(data):    
     
@@ -180,7 +181,7 @@ def VIF_test(data):
     X_with_const = model.model.exog
     if X_with_const.shape[1] == 2:  # 1 variável + constante
         print('Regressão linear simples - Não será calculado o VIF')
-        return
+        return(model)
 
         
 
@@ -456,7 +457,8 @@ def diagnostic_plots(data, plots=['regressao','residuos', 'qq', 'hist', 'scale',
     plt.tight_layout()    
     plt.show()
     if return_fig:
-        return(fig)
+        return(fig, model)
+    return(model)
 
 def _plot_KS(fitted, residuos, ax):
     # Calcular CDF empírica e teórica
